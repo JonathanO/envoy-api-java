@@ -1,22 +1,36 @@
 # Envoy Java API
 
-This builds a grpc library for the envoy xDS API.
+Java protobuf and gRPC classes for the [Envoy](https://www.envoyproxy.io/) xDS API, published as
+`net.woaf.jono.envoy:envoy-api`.
 
 ## Versioning
-Major and minor version follow the envoy version against which they are built. The patch version is this library's patch version. Use the latest patch version for the envoy major.minor you run, e.g. use the latest 1.17.x for this library if you run envoy 1.17.y, regardless of what y is.
 
-## Building
+Each release is built from one Envoy release and carries its version: `1.40.0` is Envoy 1.40.0's API. A rebuild of the
+same Envoy release gets a suffix, e.g. `1.40.0-1`. Use the version matching the Envoy you run, or any later one: the v3
+API only grows, and older Envoys ignore fields they don't know (see Envoy's
+[API versioning policy](https://github.com/envoyproxy/envoy/blob/main/api/API_VERSIONING.md)).
 
-The `tools` directory follows https://github.com/envoyproxy/java-control-plane/commits/main/tools as closely as possible.
+The classes are generated with protoc 3.25, so they run on protobuf-java 3.25+ and 4.x.
 
-1. Grab the Commit ID of the envoy version you are going to use and update it into the `API_SHAS` file.
-2. Next see its Bazel dependencices `https://github.com/envoyproxy/envoy/blob/{GITHUB_COMMIT_ID}/api/bazel/repository_locations.bzl`
-3. Update the remaining SHAs and Versions in the `API_SHAS` file. 
-4. This is an alternate : you can also use the run `update-sha.sh MAJOR.MINOR.PATCH`, paste the end of its output to `API_SHAS`.
-5. Update the proto files using `update-api.sh`. This will remove the old `src/main/proto` and fetch a new set of protos.
-6. Bump the library version according to `Versioning` above in `gradle.properties`.
-7. Now it should build on CI. Can try locally using `./gradlew assemble`, but see GHA workflow for specific steps.
-8. You may need to add or remove protos depending on the failures and you would want to refer to the bazel dependencies file to figure out what failed, finally udpate the scripts to have the change.
+## How it's built
 
-Note: until we catch up with Envoy head version, slight adjustments might be needed for these scripts, towards matching upstream more closely.
-https://github.com/envoyproxy/envoy/blob/6fe1905459ff267a43a8a26d042ae03a8aa7bc98/api/bazel/repository_locations.bzl
+Envoy publishes every release to the [Buf registry](https://buf.build/envoyproxy/envoy) together with its third-party
+proto dependencies (xds, udpa, protoc-gen-validate, googleapis, cel, OpenTelemetry, Prometheus), pinned by Envoy's
+`api/buf.lock`. The build exports one release from there and compiles it:
+
+```
+./gradlew build -PenvoyVersion=1.40.0
+```
+
+This needs the [`buf` CLI](https://buf.build/docs/cli/installation/) on your `PATH`.
+
+`google/api/annotations.proto`, `google/api/http.proto` and `google/rpc/status.proto` are not bundled: they come from
+`com.google.api.grpc:proto-google-common-protos`, which gRPC already depends on, so the classes aren't duplicated.
+
+## Releasing
+
+`.github/workflows/release.yml` runs daily. It publishes every Envoy release from 1.31.0 on that has no `v<version>`
+tag in this repository yet, then tags it. Run it by hand to publish one version, or a rebuild with a build number.
+
+It does nothing until the repository variable `PUBLISH` is `true`, and needs these secrets:
+`SONATYPE_USER`, `SONATYPE_PASSWORD` (a Maven Central Portal user token), `OSS_SIGNING_KEY` and `OSS_SIGNING_PASSWORD`.
