@@ -1,0 +1,87 @@
+name: "Release"
+
+# Publishes every Envoy release (as labelled in the Buf registry) that has no v<version> tag here yet.
+# Does nothing until the repository variable PUBLISH is set to "true" and the Maven Central secrets exist.
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+    inputs:
+      envoy_version:
+        description: "Publish only this Envoy version, e.g. 1.40.0 (default: every unpublished release)"
+        required: false
+      build_number:
+        description: "Rebuild suffix, publishing <version>-<n> (only with envoy_version)"
+        required: false
+
+concurrency: release
+
+jobs:
+  release:
+    name: "Release"
+    if: vars.PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push release tags
+    env:
+      MIN_ENVOY_VERSION: "1.31.0" # oldest release Envoy labels in the Buf registry
+      MAX_RELEASES_PER_RUN: "5" # a build takes several minutes; later runs catch up on a backlog
+      SONATYPE_USER: ${{ secrets.SONATYPE_USER }}
+      SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+      OSS_SIGNING_KEY: ${{ secrets.OSS_SIGNING_KEY }}
+      OSS_SIGNING_PASSWORD: ${{ secrets.OSS_SIGNING_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # tags
+      - uses: actions/setup-java@v6
+        with:
+          distribution: zulu
+          java-version: 25
+      - uses: bufbuild/buf-action@v1
+        with:
+          setup_only: true
+      - uses: gradle/actions/setup-gradle@v6
+      - name: "Publish unpublished Envoy releases"
+        env:
+          ENVOY_VERSION: ${{ inputs.envoy_version }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [ -n "${ENVOY_VERSION}" ]; then
+            versions="${ENVOY_VERSION}"
+          else
+            versions=$(curl -sSf -X POST https://buf.build/buf.registry.module.v1.LabelService/ListLabels \
+                -H 'Content-Type: application/json' \
+                -d '{"pageSize":250,"resourceRef":{"name":{"owner":"envoyproxy","module":"envoy"}}}' \
+              | jq -r '.labels[].name' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sed 's/^v//' | sort -V)
+          fi
+
+          published=0
+          for v in ${versions}; do
+            if [ "${published}" -ge "${MAX_RELEASES_PER_RUN}" ]; then
+              echo "Published ${published}; leaving the rest for the next run"
+              break
+            fi
+            if [ "$(printf '%s\n%s\n' "${MIN_ENVOY_VERSION}" "${v}" | sort -V | head -1)" != "${MIN_ENVOY_VERSION}" ]; then
+              continue
+            fi
+            release="${v}${BUILD_NUMBER:+-${BUILD_NUMBER}}"
+            if git rev-parse -q --verify "refs/tags/v${release}" >/dev/null; then
+              continue
+            fi
+            echo "::group::Envoy ${v} as ${release}"
+            args=(-PenvoyVersion="${v}" --console=plain)
+            if [ -n "${BUILD_NUMBER}" ]; then
+              args+=(-PbuildNumber="${BUILD_NUMBER}")
+            fi
+            ./gradlew "${args[@]}" clean publishToSonatype closeAndReleaseSonatypeStagingRepository
+            git tag -a "v${release}" -m "Envoy ${v}"
+            git push origin "v${release}"
+            published=$((published + 1))
+            echo "::endgroup::"
+          done

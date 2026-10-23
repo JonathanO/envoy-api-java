@@ -1,26 +1,22 @@
-import org.eclipse.jgit.api.errors.RefAlreadyExistsException
-
 plugins {
-    id 'java'
-    id 'com.google.protobuf' version '0.9.4'
+    id 'java-library'
+    id 'com.google.protobuf' version '0.9.5'
     id 'idea'
-    id 'org.ajoberstar.grgit' version '5.2.2'
-    id 'io.github.gradle-nexus.publish-plugin' version "1.3.0"
+    id 'io.github.gradle-nexus.publish-plugin' version "2.0.0"
 }
 
-group = "com.transferwise.envoy"
+group = "net.woaf.jono.envoy"
 
-ext.projectName = "envoy-api"
-ext.projectDescription = "envoy-api"
-ext.projectArtifactName = "envoy-api"
-ext.projectGitHubRepoName = "envoy-api-java"
-ext.projectScmUrl = "https://github.com/transferwise/${projectGitHubRepoName}"
-ext.projectScmConnection = "scm:git:git://github.com/transferwise/${projectGitHubRepoName}.git"
+// The Envoy release to build, e.g. -PenvoyVersion=1.40.0. -PbuildNumber=1 publishes a rebuild as 1.40.0-1.
+def envoyVersion = providers.gradleProperty("envoyVersion").get()
+def buildNumber = providers.gradleProperty("buildNumber").getOrNull()
+version = buildNumber ? "${envoyVersion}-${buildNumber}" : envoyVersion
 
+ext.projectScmUrl = "https://github.com/JonathanO/envoy-api-java"
+ext.projectScmConnection = "scm:git:git://github.com/JonathanO/envoy-api-java.git"
 
 repositories {
     mavenCentral()
-    mavenLocal()
 }
 
 idea.project {
@@ -48,19 +44,48 @@ tasks.withType(Javadoc).configureEach {
 }
 
 def grpcVersion = '1.79.0'
+// Generated code runs on this protobuf-java major and the next, so 3.x gencode suits both 3.x and 4.x users.
 def protobufVersion = '3.25.9'
-def protocVersion = protobufVersion
 
 dependencies {
-    implementation "com.google.protobuf:protobuf-java:${protobufVersion}"
-    implementation "io.grpc:grpc-protobuf:${grpcVersion}"
-    implementation "io.grpc:grpc-stub:${grpcVersion}"
+    api "com.google.protobuf:protobuf-java:${protobufVersion}"
+    // Also provides google/api/{annotations,http}.proto and google/rpc/status.proto, which we therefore don't bundle.
+    api "io.grpc:grpc-protobuf:${grpcVersion}"
+    api "io.grpc:grpc-stub:${grpcVersion}"
     implementation 'javax.annotation:javax.annotation-api:1.3.2'
     runtimeOnly "io.grpc:grpc-netty-shaded:${grpcVersion}"
 }
 
+// Envoy pushes every release to the Buf registry, with its third-party proto dependencies pinned in api/buf.lock.
+// Exporting a release label gives exactly the protos that release needs.
+def exportedProtos = layout.buildDirectory.dir("envoy-protos")
+def exportProtos = tasks.register("exportProtos", Exec) {
+    inputs.property("envoyVersion", envoyVersion)
+    outputs.dir(exportedProtos)
+    def out = exportedProtos.get().asFile
+    doFirst { delete out }
+    commandLine "buf", "export", "buf.build/envoyproxy/envoy:v${envoyVersion}", "--output", out
+    doLast {
+        delete fileTree(out) {
+            include "bazel/**" // Envoy's Bazel test data
+            include "google/api/annotations.proto", "google/api/http.proto", "google/rpc/status.proto" // from proto-google-common-protos
+        }
+    }
+}
+
+sourceSets {
+    main {
+        proto {
+            srcDir exportedProtos
+        }
+    }
+}
+
+tasks.named("extractProto") { dependsOn exportProtos }
+tasks.named("processResources") { dependsOn exportProtos }
+
 protobuf {
-    protoc { artifact = "com.google.protobuf:protoc:${protocVersion}" }
+    protoc { artifact = "com.google.protobuf:protoc:${protobufVersion}" }
     plugins {
         grpc { artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}" }
     }
@@ -69,19 +94,10 @@ protobuf {
     }
 }
 
-sourceSets {
-    main {
-        java {
-            srcDirs 'build/generated/source/proto/main/grpc'
-            srcDirs 'build/generated/source/proto/main/java'
-        }
-    }
-}
-
 jar {
     manifest {
         attributes(
-                "Implementation-Title": projectName,
+                "Implementation-Title": "envoy-api",
                 "Implementation-Version": archiveVersion
         )
     }
@@ -90,12 +106,12 @@ jar {
 apply plugin: "maven-publish"
 apply plugin: "signing"
 
-ext.artifactoryUser = project.hasProperty("artifactoryUser") ? project.artifactoryUser : System.env.ARTIFACTORY_USER as String
-ext.artifactoryPassword = project.hasProperty("artifactoryPassword") ? project.artifactoryPassword : System.env.ARTIFACTORY_PASSWORD as String
-
 nexusPublishing {
     repositories {
         sonatype {
+            // Maven Central Portal's OSSRH-compatible staging API
+            nexusUrl = uri("https://ossrh-staging-api.central.sonatype.com/service/local/")
+            snapshotRepositoryUrl = uri("https://central.sonatype.com/repository/maven-snapshots/")
             username = System.getenv("SONATYPE_USER")
             password = System.getenv("SONATYPE_PASSWORD")
         }
@@ -106,13 +122,11 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             from components.java
-            afterEvaluate {
-                artifactId = projectArtifactName
-            }
+            artifactId = "envoy-api"
 
             pom {
-                name = projectName
-                description = projectDescription
+                name = "envoy-api"
+                description = "Java protobuf and gRPC classes for the Envoy xDS API, built from Envoy release ${envoyVersion}"
                 url = projectScmUrl
                 packaging = "jar"
                 licenses {
@@ -125,9 +139,7 @@ publishing {
                     developer {
                         id = 'JonathanO'
                         name = 'Jonathan Oddy'
-                        email = "jonathan.oddy@transferwise.com"
-                        organization = "Transferwise Ltd"
-                        organizationUrl = "https://github.com/transferwise"
+                        email = "jonathan@woaf.net"
                     }
                 }
                 scm {
@@ -138,51 +150,11 @@ publishing {
             }
         }
     }
-
-    if (System.getenv("OSS_SIGNING_KEY")) {
-        signing {
-            useInMemoryPgpKeys(System.getenv("OSS_SIGNING_KEY"), System.getenv("OSS_SIGNING_PASSWORD"))
-            sign publishing.publications.mavenJava
-        }
-    }
-
-    repositories {
-        maven {
-            url System.getenv("MAVEN_URL")
-            credentials {
-                username = System.getenv("MAVEN_USER")
-                password = System.getenv("MAVEN_PASSWORD")
-            }
-        }
-    }
 }
 
-task tagRelease {
-    doLast {
-        try {
-            grgit.tag.add {
-                name = "v$version"
-                message = "Release of ${version}"
-            }
-            grgit.push(refsOrSpecs: ["v$version"])
-        }
-        catch (RefAlreadyExistsException ignored) {
-            logger.warn("Tag v$version already exists.")
-        }
-    }
-}
-
-task validateVersion {
-    doLast {
-        def tagName = "v$version"
-        def remoteTags = grgit.lsremote(tags: true)
-
-        def refName = "refs/tags/${tagName}"
-        def remoteHasTag = remoteTags.keySet().any { ref -> ref.fullName == refName }
-
-        if (remoteHasTag) {
-            throw new GradleException("Tag ${tagName} already exists. Bump the version in gradle.properties.")
-        }
-        logger.lifecycle("✓ Version ${version} is valid (tag ${tagName} does not exist yet)")
+if (System.getenv("OSS_SIGNING_KEY")) {
+    signing {
+        useInMemoryPgpKeys(System.getenv("OSS_SIGNING_KEY"), System.getenv("OSS_SIGNING_PASSWORD"))
+        sign publishing.publications.mavenJava
     }
 }
