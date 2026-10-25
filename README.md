@@ -6,8 +6,8 @@ Java protobuf and gRPC classes for the [Envoy](https://www.envoyproxy.io/) xDS A
 ## Versioning
 
 Each release is built from one Envoy release and carries its version: `1.40.0` is Envoy 1.40.0's API. A rebuild of the
-same Envoy release gets a suffix, e.g. `1.40.0-1`. An Envoy release whose protos are the same as the release before
-isn't published, e.g. there's no 1.36.1 because its API is 1.36.0's. So use the newest version that isn't newer than
+same Envoy release gets a suffix, e.g. `1.40.0-1`. An Envoy release whose API is the same as the release before isn't
+published, e.g. there's no 1.36.1 because its API is 1.36.0's. Most patch releases change no protos, or only comments. So use the newest version that isn't newer than
 the Envoy you run, or any later one: the v3 API only grows, and older Envoys ignore fields they don't know (see Envoy's
 [API versioning policy](https://github.com/envoyproxy/envoy/blob/main/api/API_VERSIONING.md)).
 
@@ -39,8 +39,9 @@ dependency to `api/buf.yaml`.
 ## Releasing
 
 `.github/workflows/release.yml` runs daily. It publishes every Envoy release from 1.36.0 (the oldest upstream still
-supports) that has no `v<version>` tag in this repository yet, then tags it. It skips releases whose protos are the
-same as the release before: Envoy's Buf labels point at content-addressed commits, so those share a commit. Run it by hand to publish one version, or a rebuild with a build number.
+supports) that has no `v<version>` tag in this repository yet, then tags it. It skips releases whose API is the same
+as the release before: `.github/scripts/api-changes.sh` compares their descriptors, leaving out comments, which don't
+change the generated classes. Run it by hand to publish one version, or a rebuild with a build number.
 
 It does nothing until the repository variable `PUBLISH` is `true`, and needs these secrets:
 `SONATYPE_USER`, `SONATYPE_PASSWORD` (a Maven Central Portal user token), `OSS_SIGNING_KEY` and `OSS_SIGNING_PASSWORD`.
