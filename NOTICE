@@ -1,0 +1,16 @@
+envoy-api: Java classes generated from the Envoy API and the protos it depends on.
+
+This product includes the Envoy API (https://github.com/envoyproxy/envoy):
+
+    Envoy
+    Copyright The Envoy Project Authors
+
+    Licensed under Apache License 2.0.  See LICENSE for terms.
+
+This product includes the Prometheus data model (https://github.com/prometheus/client_model):
+
+    Data model artifacts for Prometheus.
+    Copyright 2012-2015 The Prometheus Authors
+
+    This product includes software developed at
+    SoundCloud Ltd. (http://soundcloud.com/).
