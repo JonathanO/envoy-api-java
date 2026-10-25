@@ -43,12 +43,10 @@ tasks.withType(Jar).configureEach {
     }
 }
 
-tasks.withType(Javadoc).configureEach {
-    options.addStringOption('Xdoclint:none', '-quiet')
-    options.encoding = 'UTF-8'
-    options.charSet = 'UTF-8'
-    options.docEncoding = 'UTF-8'
-}
+// Central requires a javadoc jar, but javadoc of the generated code is over half of each release (~55 MB) and counts
+// against Central's publishing limits. The sources jar serves IDEs, so the javadoc jar only points to Envoy's docs.
+tasks.named("javadoc") { enabled = false }
+tasks.named("javadocJar", Jar) { from("javadoc/README.md") }
 
 def grpcVersion = '1.79.0'
 // Generated code runs on this protobuf-java major and the next, so 3.x gencode suits both 3.x and 4.x users.

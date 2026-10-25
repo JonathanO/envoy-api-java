@@ -1,6 +1,7 @@
 name: "Release"
 
-# Publishes every Envoy release (as labelled in the Buf registry) that has no v<version> tag here yet.
+# Publishes every Envoy release (as labelled in the Buf registry) that has no v<version> tag here yet, skipping releases
+# whose API is the same as the release before (see .github/scripts/api-changes.sh).
 # Does nothing until the repository variable PUBLISH is set to "true" and the Maven Central secrets exist.
 
 on:
@@ -25,7 +26,7 @@ jobs:
     permissions:
       contents: write # push release tags
     env:
-      MIN_ENVOY_VERSION: "1.31.0" # oldest release Envoy labels in the Buf registry
+      MIN_ENVOY_VERSION: "1.36.0" # oldest Envoy release upstream still supports
       MAX_RELEASES_PER_RUN: "5" # a build takes several minutes; later runs catch up on a backlog
       SONATYPE_USER: ${{ secrets.SONATYPE_USER }}
       SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
@@ -55,7 +56,7 @@ jobs:
           if [ -n "${ENVOY_VERSION}" ]; then
             versions="${ENVOY_VERSION}"
           else
-            versions=$(.github/scripts/envoy-releases.sh)
+            versions=$(.github/scripts/api-changes.sh "${MIN_ENVOY_VERSION}")
           fi
 
           published=0
@@ -63,9 +64,6 @@ jobs:
             if [ "${published}" -ge "${MAX_RELEASES_PER_RUN}" ]; then
               echo "Published ${published}; leaving the rest for the next run"
               break
-            fi
-            if [ "$(printf '%s\n%s\n' "${MIN_ENVOY_VERSION}" "${v}" | sort -V | head -1)" != "${MIN_ENVOY_VERSION}" ]; then
-              continue
             fi
             release="${v}${BUILD_NUMBER:+-${BUILD_NUMBER}}"
             if git rev-parse -q --verify "refs/tags/v${release}" >/dev/null; then
