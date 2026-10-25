@@ -37,6 +37,10 @@ java {
 
 tasks.withType(Jar).configureEach {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    // Apache 2.0 section 4: what we distribute carries the licence and the upstream NOTICEs.
+    metaInf {
+        from(rootProject.file("LICENSE"), rootProject.file("NOTICE"))
+    }
 }
 
 tasks.withType(Javadoc).configureEach {

@@ -25,6 +25,10 @@ proto dependencies (xds, udpa, protoc-gen-validate, googleapis, cel, OpenTelemet
 There's no default release. CI builds the latest one, from `.github/scripts/envoy-releases.sh`. This needs the
 [`buf` CLI](https://buf.build/docs/cli/installation/) on your `PATH`.
 
+Envoy and its proto dependencies are all Apache 2.0, like this project. `NOTICE` carries the notices of those that
+have one (Envoy, Prometheus client_model), and goes into every jar with `LICENSE`. Check it when Envoy adds a
+dependency to `api/buf.yaml`.
+
 `google/api/annotations.proto`, `google/api/http.proto` and `google/rpc/status.proto` are not bundled: they come from
 `com.google.api.grpc:proto-google-common-protos`, which gRPC already depends on, so the classes aren't duplicated.
 
