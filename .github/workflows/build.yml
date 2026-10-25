@@ -24,5 +24,5 @@ jobs:
         with:
           setup_only: true
       - uses: gradle/actions/setup-gradle@v6
-      - name: "Build and publish locally"
-        run: ./gradlew build publishToMavenLocal --console=plain
+      - name: "Build the latest Envoy release and publish locally"
+        run: ./gradlew build publishToMavenLocal -PenvoyVersion="$(.github/scripts/envoy-releases.sh | tail -1)" --console=plain

@@ -55,10 +55,7 @@ jobs:
           if [ -n "${ENVOY_VERSION}" ]; then
             versions="${ENVOY_VERSION}"
           else
-            versions=$(curl -sSf -X POST https://buf.build/buf.registry.module.v1.LabelService/ListLabels \
-                -H 'Content-Type: application/json' \
-                -d '{"pageSize":250,"resourceRef":{"name":{"owner":"envoyproxy","module":"envoy"}}}' \
-              | jq -r '.labels[].name' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sed 's/^v//' | sort -V)
+            versions=$(.github/scripts/envoy-releases.sh)
           fi
 
           published=0
