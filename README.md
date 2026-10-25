@@ -22,7 +22,8 @@ proto dependencies (xds, udpa, protoc-gen-validate, googleapis, cel, OpenTelemet
 ./gradlew build -PenvoyVersion=1.40.0
 ```
 
-This needs the [`buf` CLI](https://buf.build/docs/cli/installation/) on your `PATH`.
+There's no default release. CI builds the latest one, from `.github/scripts/envoy-releases.sh`. This needs the
+[`buf` CLI](https://buf.build/docs/cli/installation/) on your `PATH`.
 
 `google/api/annotations.proto`, `google/api/http.proto` and `google/rpc/status.proto` are not bundled: they come from
 `com.google.api.grpc:proto-google-common-protos`, which gRPC already depends on, so the classes aren't duplicated.

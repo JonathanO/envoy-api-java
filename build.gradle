@@ -8,7 +8,10 @@ plugins {
 group = "net.woaf.jono.envoy"
 
 // The Envoy release to build, e.g. -PenvoyVersion=1.40.0. -PbuildNumber=1 publishes a rebuild as 1.40.0-1.
-def envoyVersion = providers.gradleProperty("envoyVersion").get()
+def envoyVersion = providers.gradleProperty("envoyVersion").orNull
+if (!envoyVersion) {
+    throw new GradleException("Say which Envoy release to build, e.g. -PenvoyVersion=1.40.0")
+}
 def buildNumber = providers.gradleProperty("buildNumber").getOrNull()
 version = buildNumber ? "${envoyVersion}-${buildNumber}" : envoyVersion
 
